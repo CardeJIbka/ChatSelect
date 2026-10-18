@@ -1,0 +1,28 @@
+{
+	"schemaVersion": 1,
+	"id": "chatselect",
+	"version": "${version}",
+	"name": "Chat Select",
+	"description": "Select and copy chat text with the mouse, just like in a text editor.",
+	"authors": ["CardeJIbka"],
+	"contact": {
+		"sources": "https://github.com/CardeJIbka/ChatSelect"
+	},
+	"license": "MIT",
+	"icon": "assets/chatselect/icon.png",
+	"environment": "client",
+	"entrypoints": {
+		"client": ["com.cardejibka.client.ChatSelectClient"]
+	},
+	"mixins": [
+		{
+			"config": "chatselect.client.mixins.json",
+			"environment": "client"
+		}
+	],
+	"depends": {
+		"fabricloader": ">=0.18.6",
+		"minecraft": ">=26.1 <=26.1.2",
+		"java": ">=25"
+	}
+}
