@@ -311,27 +311,31 @@ public final class ChatSelection {
         double bottom = layout.bottom * layout.scale;
 
         if (mouseY < top) {
-            mc.gui.getChat().scrollChat(1);
+            chat(mc).scrollChat(1);
         } else if (mouseY > bottom) {
-            mc.gui.getChat().scrollChat(-1);
+            chat(mc).scrollChat(-1);
         }
     }
 
     private record Layout(List<GuiMessage.Line> lines, double scale, int lineHeight,
                           int bottom, int scroll, int rows) {}
 
+    private static ChatComponent chat(Minecraft mc) {
+        return mc.gui.hud.getChat();
+    }
+
     private static List<GuiMessage.Line> lines(Minecraft mc) {
-        return ((ChatComponentAccessor) mc.gui.getChat()).chatselect$lines();
+        return ((ChatComponentAccessor) chat(mc)).chatselect$lines();
     }
 
     private static Layout layout(Minecraft mc) {
-        ChatComponentAccessor chat = (ChatComponentAccessor) mc.gui.getChat();
-        List<GuiMessage.Line> lines = chat.chatselect$lines();
+        ChatComponentAccessor accessor = (ChatComponentAccessor) chat(mc);
+        List<GuiMessage.Line> lines = accessor.chatselect$lines();
 
         double scale = mc.options.chatScale().get();
         int lineHeight = (int) (9.0 * (mc.options.chatLineSpacing().get() + 1.0));
         int bottom = Mth.floor((mc.getWindow().getGuiScaledHeight() - 40) / scale);
-        int scroll = chat.chatselect$scroll();
+        int scroll = accessor.chatselect$scroll();
 
         int perPage = ChatComponent.getHeight(mc.options.chatHeightFocused().get()) / lineHeight;
         int rows = Math.max(0, Math.min(lines.size() - scroll, perPage));
