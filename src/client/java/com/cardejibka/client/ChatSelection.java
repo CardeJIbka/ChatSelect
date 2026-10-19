@@ -3,6 +3,8 @@ package com.cardejibka.client;
 import com.cardejibka.client.mixin.ChatComponentAccessor;
 import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+
+import java.nio.FloatBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,7 +17,8 @@ import net.minecraft.client.multiplayer.chat.GuiMessage;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLMouse;
+import org.lwjgl.system.MemoryStack;
 
 public final class ChatSelection {
 
@@ -271,8 +274,11 @@ public final class ChatSelection {
     }
 
     private static boolean isLeftDown() {
-        long window = GLFW.glfwGetCurrentContext();
-        return GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            FloatBuffer x = stack.mallocFloat(1);
+            FloatBuffer y = stack.mallocFloat(1);
+            return (SDLMouse.SDL_GetMouseState(x, y) & 1) != 0;
+        }
     }
 
     private static int charAt(Font font, Glyphs glyphs, double x) {

@@ -1,6 +1,7 @@
 package com.cardejibka.client.mixin;
 
 import com.cardejibka.client.ChatSelection;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
@@ -9,7 +10,7 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
+import org.lwjgl.sdl.SDLScancode;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -36,7 +37,7 @@ public abstract class ChatScreenMixin extends Screen {
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true)
     private void chatselect$onClick(MouseButtonEvent event, boolean doubleClick,
                                     CallbackInfoReturnable<Boolean> cir) {
-        if (chatselect$replaying || event.button() != 0) {
+        if (chatselect$replaying || event.button() != InputConstants.MOUSE_BUTTON_LEFT) {
             return;
         }
 
@@ -86,13 +87,13 @@ public abstract class ChatScreenMixin extends Screen {
         }
 
         Minecraft mc = Minecraft.getInstance();
-        if (event.key() == GLFW.GLFW_KEY_C && chatselect$selection.hasSelection()) {
+        if (event.key() == SDLScancode.SDL_SCANCODE_C && chatselect$selection.hasSelection()) {
             String text = chatselect$selection.getText(mc);
             if (!text.isEmpty()) {
                 mc.keyboardHandler.setClipboard(text);
             }
             cir.setReturnValue(true);
-        } else if (event.key() == GLFW.GLFW_KEY_A && event.hasShiftDown()) {
+        } else if (event.key() == SDLScancode.SDL_SCANCODE_A && event.hasShiftDown()) {
             chatselect$selection.selectAll(mc);
             chatselect$clearInputSelection();
             cir.setReturnValue(true);
