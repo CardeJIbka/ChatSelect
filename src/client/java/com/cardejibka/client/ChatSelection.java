@@ -1,17 +1,16 @@
 package com.cardejibka.client;
 
 import com.cardejibka.client.mixin.ChatComponentAccessor;
-import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.minecraft.client.GuiMessage;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
-import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.input.MouseButtonEvent;
-import net.minecraft.client.multiplayer.chat.GuiMessage;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -21,8 +20,13 @@ public final class ChatSelection {
 
     private static final int PADDING = 4;
     private static final long MULTI_CLICK_MS = 500;
+    private static final int HIGHLIGHT = 0x883399FF;
+
+    private static long ibeamCursor;
 
     public record Hit(GuiMessage.Line line, int ch, int under) {}
+
+    public record Press(double x, double y, int button) {}
 
     private GuiMessage.Line anchorLine;
     private GuiMessage.Line headLine;
@@ -31,20 +35,21 @@ public final class ChatSelection {
 
     private boolean dragging;
     private boolean moved;
-    private MouseButtonEvent pressEvent;
+    private Press press;
     private int scrollTimer;
+    private boolean ibeamActive;
 
     private long lastClickTime;
     private double lastClickX;
     private double lastClickY;
     private int clickCount;
 
-    public void start(Hit hit, MouseButtonEvent event) {
+    public void start(Hit hit, double x, double y, int button) {
         anchorLine = headLine = hit.line();
         anchorCh = headCh = hit.ch();
         dragging = true;
         moved = false;
-        pressEvent = event;
+        press = new Press(x, y, button);
     }
 
     public void clear() {
@@ -52,7 +57,7 @@ public final class ChatSelection {
         anchorCh = headCh = 0;
         dragging = false;
         moved = false;
-        pressEvent = null;
+        press = null;
     }
 
     public boolean hasSelection() {
@@ -139,7 +144,7 @@ public final class ChatSelection {
         dragging = false;
     }
 
-    public MouseButtonEvent update(Minecraft mc, int mouseX, int mouseY) {
+    public Press update(Minecraft mc, int mouseX, int mouseY) {
         if (!dragging) {
             return null;
         }
@@ -159,21 +164,40 @@ public final class ChatSelection {
 
         dragging = false;
         if (!moved) {
-            MouseButtonEvent click = pressEvent;
+            Press click = press;
             clear();
             return click;
         }
-        pressEvent = null;
+        press = null;
         return null;
     }
 
-    public void updateCursor(GuiGraphicsExtractor graphics, Minecraft mc, int mouseX, int mouseY) {
-        if (dragging || isOverText(mc, mouseX, mouseY)) {
-            graphics.requestCursor(CursorTypes.IBEAM);
+    public void updateCursor(Minecraft mc, int mouseX, int mouseY, boolean overInput) {
+        boolean wanted = dragging || overInput || isOverText(mc, mouseX, mouseY);
+        if (wanted == ibeamActive) {
+            return;
+        }
+        ibeamActive = wanted;
+
+        long window = mc.getWindow().getWindow();
+        if (wanted) {
+            if (ibeamCursor == 0L) {
+                ibeamCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_IBEAM_CURSOR);
+            }
+            GLFW.glfwSetCursor(window, ibeamCursor);
+        } else {
+            GLFW.glfwSetCursor(window, 0L);
         }
     }
 
-    public void render(GuiGraphicsExtractor graphics, Minecraft mc) {
+    public void resetCursor(Minecraft mc) {
+        if (ibeamActive) {
+            ibeamActive = false;
+            GLFW.glfwSetCursor(mc.getWindow().getWindow(), 0L);
+        }
+    }
+
+    public void render(GuiGraphics graphics, Minecraft mc) {
         Range range = range(mc);
         if (range == null) {
             return;
@@ -198,7 +222,7 @@ public final class ChatSelection {
             int x2 = Math.round((PADDING + mc.font.width(glyphs.prefix(end))) * scale);
             int y1 = Math.round((layout.bottom - (row + 1) * layout.lineHeight) * scale);
             int y2 = Math.round((layout.bottom - row * layout.lineHeight) * scale);
-            graphics.textHighlight(x1, y1, x2, y2, true);
+            graphics.fill(RenderType.guiTextHighlight(), x1, y1, x2, y2, 0xFF0000FF);
         }
     }
 
@@ -270,9 +294,39 @@ public final class ChatSelection {
         return x <= mc.font.width(hit.line().content());
     }
 
-    private static boolean isLeftDown() {
+    public static boolean isLeftDown() {
         long window = GLFW.glfwGetCurrentContext();
         return GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
+    }
+
+    public static int[] wordRange(String text, int index) {
+        if (text.isEmpty()) {
+            return new int[]{0, 0};
+        }
+
+        int i = Mth.clamp(index, 0, text.length() - 1);
+        int kind = kindOf(text.charAt(i));
+        int start = i;
+        int end = i + 1;
+        while (start > 0 && kindOf(text.charAt(start - 1)) == kind) {
+            start--;
+        }
+        while (end < text.length() && kindOf(text.charAt(end)) == kind) {
+            end++;
+        }
+        if (kind != 0) {
+            while (end < text.length() && kindOf(text.charAt(end)) == 0) {
+                end++;
+            }
+        }
+        return new int[]{start, end};
+    }
+
+    private static int kindOf(int cp) {
+        if (Character.isWhitespace(cp)) {
+            return 0;
+        }
+        return Character.isLetterOrDigit(cp) || cp == '_' ? 1 : 2;
     }
 
     private static int charAt(Font font, Glyphs glyphs, double x) {
@@ -311,27 +365,31 @@ public final class ChatSelection {
         double bottom = layout.bottom * layout.scale;
 
         if (mouseY < top) {
-            mc.gui.getChat().scrollChat(1);
+            chat(mc).scrollChat(1);
         } else if (mouseY > bottom) {
-            mc.gui.getChat().scrollChat(-1);
+            chat(mc).scrollChat(-1);
         }
     }
 
     private record Layout(List<GuiMessage.Line> lines, double scale, int lineHeight,
                           int bottom, int scroll, int rows) {}
 
+    private static ChatComponent chat(Minecraft mc) {
+        return mc.gui.getChat();
+    }
+
     private static List<GuiMessage.Line> lines(Minecraft mc) {
-        return ((ChatComponentAccessor) mc.gui.getChat()).chatselect$lines();
+        return ((ChatComponentAccessor) chat(mc)).chatselect$lines();
     }
 
     private static Layout layout(Minecraft mc) {
-        ChatComponentAccessor chat = (ChatComponentAccessor) mc.gui.getChat();
-        List<GuiMessage.Line> lines = chat.chatselect$lines();
+        ChatComponentAccessor accessor = (ChatComponentAccessor) chat(mc);
+        List<GuiMessage.Line> lines = accessor.chatselect$lines();
 
         double scale = mc.options.chatScale().get();
         int lineHeight = (int) (9.0 * (mc.options.chatLineSpacing().get() + 1.0));
         int bottom = Mth.floor((mc.getWindow().getGuiScaledHeight() - 40) / scale);
-        int scroll = chat.chatselect$scroll();
+        int scroll = accessor.chatselect$scroll();
 
         int perPage = ChatComponent.getHeight(mc.options.chatHeightFocused().get()) / lineHeight;
         int rows = Math.max(0, Math.min(lines.size() - scroll, perPage));
