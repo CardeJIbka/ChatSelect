@@ -10,7 +10,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -222,7 +222,7 @@ public final class ChatSelection {
             int x2 = Math.round((PADDING + mc.font.width(glyphs.prefix(end))) * scale);
             int y1 = Math.round((layout.bottom - (row + 1) * layout.lineHeight) * scale);
             int y2 = Math.round((layout.bottom - row * layout.lineHeight) * scale);
-            graphics.fill(RenderType.guiTextHighlight(), x1, y1, x2, y2, 0xFF0000FF);
+            graphics.fill(RenderPipelines.GUI_TEXT_HIGHLIGHT, x1, y1, x2, y2, 0xFF0000FF);
         }
     }
 
