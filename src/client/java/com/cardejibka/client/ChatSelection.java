@@ -1,6 +1,7 @@
 package com.cardejibka.client;
 
 import com.cardejibka.client.mixin.ChatComponentAccessor;
+import com.mojang.blaze3d.vertex.PoseStack;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.ArrayList;
 import java.util.List;
@@ -10,7 +11,6 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ChatComponent;
-import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -204,6 +204,10 @@ public final class ChatSelection {
         }
         Layout layout = layout(mc);
 
+        var pose = graphics.pose();
+        pose.pushMatrix();
+        pose.scale((float) layout.scale, (float) layout.scale);
+
         for (int i = range.from; i >= range.to; i--) {
             int row = i - layout.scroll;
             if (row < 0 || row >= layout.rows) {
@@ -217,13 +221,16 @@ public final class ChatSelection {
                 continue;
             }
 
-            float scale = (float) layout.scale;
-            int x1 = Math.round((PADDING + mc.font.width(glyphs.prefix(start))) * scale);
-            int x2 = Math.round((PADDING + mc.font.width(glyphs.prefix(end))) * scale);
-            int y1 = Math.round((layout.bottom - (row + 1) * layout.lineHeight) * scale);
-            int y2 = Math.round((layout.bottom - row * layout.lineHeight) * scale);
-            graphics.fill(RenderPipelines.GUI_TEXT_HIGHLIGHT, x1, y1, x2, y2, 0xFF0000FF);
+            int x1 = PADDING + mc.font.width(glyphs.prefix(start));
+            int x2 = PADDING + mc.font.width(glyphs.prefix(end));
+            int y1 = layout.bottom - (row + 1) * layout.lineHeight;
+            int y2 = layout.bottom - row * layout.lineHeight;
+
+            graphics.fill(x1, y1, x2, y2, 0xFFD6D6FF);
+            graphics.drawString(mc.font, glyphs.recolored(start, end, 0x0000FF), x1, y1 + 1, 0xFF0000FF, false);
         }
+
+        pose.popMatrix();
     }
 
     public String getText(Minecraft mc) {
@@ -458,6 +465,17 @@ public final class ChatSelection {
             return sink -> {
                 for (int i = 0; i < length; i++) {
                     if (!sink.accept(i, styles.get(i), codePoints.getInt(i))) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+        }
+
+        FormattedCharSequence recolored(int start, int end, int rgb) {
+            return sink -> {
+                for (int i = start; i < end; i++) {
+                    if (!sink.accept(i - start, styles.get(i).withColor(rgb), codePoints.getInt(i))) {
                         return false;
                     }
                 }
