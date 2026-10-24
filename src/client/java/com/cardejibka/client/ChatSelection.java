@@ -1,7 +1,7 @@
 package com.cardejibka.client;
 
 import com.cardejibka.client.mixin.ChatComponentAccessor;
-import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.platform.cursor.CursorTypes;
 import it.unimi.dsi.fastutil.ints.IntArrayList;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +11,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.util.Mth;
@@ -20,13 +21,8 @@ public final class ChatSelection {
 
     private static final int PADDING = 4;
     private static final long MULTI_CLICK_MS = 500;
-    private static final int HIGHLIGHT = 0x883399FF;
-
-    private static long ibeamCursor;
 
     public record Hit(GuiMessage.Line line, int ch, int under) {}
-
-    public record Press(double x, double y, int button) {}
 
     private GuiMessage.Line anchorLine;
     private GuiMessage.Line headLine;
@@ -35,21 +31,20 @@ public final class ChatSelection {
 
     private boolean dragging;
     private boolean moved;
-    private Press press;
+    private MouseButtonEvent pressEvent;
     private int scrollTimer;
-    private boolean ibeamActive;
 
     private long lastClickTime;
     private double lastClickX;
     private double lastClickY;
     private int clickCount;
 
-    public void start(Hit hit, double x, double y, int button) {
+    public void start(Hit hit, MouseButtonEvent event) {
         anchorLine = headLine = hit.line();
         anchorCh = headCh = hit.ch();
         dragging = true;
         moved = false;
-        press = new Press(x, y, button);
+        pressEvent = event;
     }
 
     public void clear() {
@@ -57,7 +52,7 @@ public final class ChatSelection {
         anchorCh = headCh = 0;
         dragging = false;
         moved = false;
-        press = null;
+        pressEvent = null;
     }
 
     public boolean hasSelection() {
@@ -144,7 +139,7 @@ public final class ChatSelection {
         dragging = false;
     }
 
-    public Press update(Minecraft mc, int mouseX, int mouseY) {
+    public MouseButtonEvent update(Minecraft mc, int mouseX, int mouseY) {
         if (!dragging) {
             return null;
         }
@@ -164,36 +159,17 @@ public final class ChatSelection {
 
         dragging = false;
         if (!moved) {
-            Press click = press;
+            MouseButtonEvent click = pressEvent;
             clear();
             return click;
         }
-        press = null;
+        pressEvent = null;
         return null;
     }
 
-    public void updateCursor(Minecraft mc, int mouseX, int mouseY, boolean overInput) {
-        boolean wanted = dragging || overInput || isOverText(mc, mouseX, mouseY);
-        if (wanted == ibeamActive) {
-            return;
-        }
-        ibeamActive = wanted;
-
-        long window = mc.getWindow().getWindow();
-        if (wanted) {
-            if (ibeamCursor == 0L) {
-                ibeamCursor = GLFW.glfwCreateStandardCursor(GLFW.GLFW_IBEAM_CURSOR);
-            }
-            GLFW.glfwSetCursor(window, ibeamCursor);
-        } else {
-            GLFW.glfwSetCursor(window, 0L);
-        }
-    }
-
-    public void resetCursor(Minecraft mc) {
-        if (ibeamActive) {
-            ibeamActive = false;
-            GLFW.glfwSetCursor(mc.getWindow().getWindow(), 0L);
+    public void updateCursor(GuiGraphics graphics, Minecraft mc, int mouseX, int mouseY) {
+        if (dragging || isOverText(mc, mouseX, mouseY)) {
+            graphics.requestCursor(CursorTypes.IBEAM);
         }
     }
 
@@ -301,39 +277,9 @@ public final class ChatSelection {
         return x <= mc.font.width(hit.line().content());
     }
 
-    public static boolean isLeftDown() {
+    private static boolean isLeftDown() {
         long window = GLFW.glfwGetCurrentContext();
         return GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
-    }
-
-    public static int[] wordRange(String text, int index) {
-        if (text.isEmpty()) {
-            return new int[]{0, 0};
-        }
-
-        int i = Mth.clamp(index, 0, text.length() - 1);
-        int kind = kindOf(text.charAt(i));
-        int start = i;
-        int end = i + 1;
-        while (start > 0 && kindOf(text.charAt(start - 1)) == kind) {
-            start--;
-        }
-        while (end < text.length() && kindOf(text.charAt(end)) == kind) {
-            end++;
-        }
-        if (kind != 0) {
-            while (end < text.length() && kindOf(text.charAt(end)) == 0) {
-                end++;
-            }
-        }
-        return new int[]{start, end};
-    }
-
-    private static int kindOf(int cp) {
-        if (Character.isWhitespace(cp)) {
-            return 0;
-        }
-        return Character.isLetterOrDigit(cp) || cp == '_' ? 1 : 2;
     }
 
     private static int charAt(Font font, Glyphs glyphs, double x) {
